@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-const repo = "anomalyco/opencode"
+const repo = process.env.GITHUB_REPOSITORY ?? "anomalyco/opencode"
 const days = 60
 const msg = `To stay organized issues are automatically closed after ${days} days of no activity. If the issue is still relevant please open a new one.`
 
@@ -59,6 +59,20 @@ async function close(num: number) {
   console.log(`Closed https://github.com/${repo}/issues/${num}`)
 }
 
+async function closeStale(nums: number[]) {
+  let closed = 0
+  for (const num of nums) {
+    try {
+      await close(num)
+      closed++
+    } catch (err) {
+      // A single failure (e.g. 403 when a fork-scoped token targets another repo) must not fail the whole run
+      console.error(`Skipping #${num}: ${err}`)
+    }
+  }
+  return closed
+}
+
 async function main() {
   let page = 1
   let closed = 0
@@ -85,23 +99,13 @@ async function main() {
         stale.push(i.number)
       } else {
         console.log(`\nFound fresh issue #${i.number}, stopping`)
-        if (stale.length > 0) {
-          for (const num of stale) {
-            await close(num)
-            closed++
-          }
-        }
+        closed += await closeStale(stale)
         console.log(`Closed ${closed} issues total`)
         return
       }
     }
 
-    if (stale.length > 0) {
-      for (const num of stale) {
-        await close(num)
-        closed++
-      }
-    }
+    closed += await closeStale(stale)
 
     page++
   }
